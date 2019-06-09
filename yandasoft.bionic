@@ -1,0 +1,19 @@
+BootStrap: docker
+From: sriggi/yandasoft
+
+%help
+	Singularity container with yandasoft tool
+
+%labels
+	Maintainer Simone Riggi (INAF-OACT)
+	Version v1.0
+
+%environment
+	
+%setup
+
+
+%post
+
+%runscript
+
