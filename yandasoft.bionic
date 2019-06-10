@@ -16,10 +16,19 @@ From: sriggi/yandasoft
 %post
 
 	#################################
+	###   APT INSTALL
+	#################################
+	echo "Installing apt-utils ..."
+	apt-get install apt-utils
+
+	echo "Updating system packages ..."
+	apt-get update
+
+	#################################
 	###   AOFLAGGER
 	#################################
-	## Install dependencies
-	apt-get -y --no-install-recommends install apt-get install aoflagger
+	echo "Installing aoflagger ..."
+	apt -y --no-install-recommends install aoflagger
 
 
 %runscript
