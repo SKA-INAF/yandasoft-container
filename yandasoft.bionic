@@ -18,11 +18,17 @@ From: sriggi/yandasoft
 	#################################
 	###   APT INSTALL
 	#################################
-	echo "Installing apt-utils ..."
-	apt-get install apt-utils
+	#echo "Installing apt-utils ..."
+	#apt-get install apt-utils
 
 	echo "Updating system packages ..."
 	apt-get update
+
+	#################################
+	###   SET ENV VARS
+	#################################
+	export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH	
+	
 
 	#################################
 	###   AOFLAGGER
@@ -30,6 +36,14 @@ From: sriggi/yandasoft
 	echo "Installing aoflagger ..."
 	apt -y --no-install-recommends install aoflagger
 
+
+	#################################
+	###    SET ENV VARS
+	#################################
+	#echo "export PATH=$PATH" >> $SINGULARITY_ENVIRONMENT
+	echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $SINGULARITY_ENVIRONMENT
+	#echo "export PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $SINGULARITY_ENVIRONMENT
+	#echo "export PYTHONPATH=$PYTHONPATH" >> $SINGULARITY_ENVIRONMENT
 
 %runscript
 
