@@ -2,7 +2,7 @@ BootStrap: docker
 From: sriggi/yandasoft
 
 %help
-	Singularity container with yandasoft tool
+	Singularity container with yandasoft tool and other addons
 
 %labels
 	Maintainer Simone Riggi (INAF-OACT)
@@ -14,6 +14,13 @@ From: sriggi/yandasoft
 
 
 %post
+
+	#################################
+	###   AOFLAGGER
+	#################################
+	## Install dependencies
+	apt-get -y --no-install-recommends install apt-get install aoflagger
+
 
 %runscript
 
