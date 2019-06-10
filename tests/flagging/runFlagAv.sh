@@ -198,7 +198,6 @@ echo "INFO: Creating run script file $shfile ..."
 	echo "#!/bin/bash"
 	
 	echo ""
-	echo 'echo "INFO: Running command "'"$EXE $EXE_ARGS"'" ...'
 	echo "$EXE $EXE_ARGS"
 
 ) > $shfile
