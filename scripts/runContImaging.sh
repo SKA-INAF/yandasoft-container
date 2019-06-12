@@ -146,6 +146,39 @@ done
 ## Compute total number of MPI processor to be given to mpirun
 NPROC_TOT=$(($NPROC * $JOB_NNODES))
 
+
+#######################################
+##         CHECK ARGS
+#######################################
+#if [ "$INPUT_MS" = "" ]; then
+#	echo "ERROR: Missing or empty input measurement set filename!"
+#	exit 1				
+#fi
+if [ "$PARSET_FILE" = "" ]; then
+	echo "ERROR: Missing or empty parset file!"
+	exit 1				
+fi
+if [ "$BATCH_QUEUE" = "" ] && [ "$SUBMIT" = true ]; then
+  echo "ERROR: Empty BATCH_QUEUE argument (hint: you must specify a queue if submit option is activated)!"
+  exit 1
+fi
+
+if [ "$BATCH_SYSTEM" = "" ] && [ "$SUBMIT" = true ]; then
+  echo "ERROR: Empty BATCH_SYSTEM argument (hint: you must specify a batch systen if submit option is activated)!"
+  exit 1
+fi
+
+if [ "$BATCH_SYSTEM" != "PBS" ] && [ "$BATCH_SYSTEM" != "SLURM" ]; then
+  echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
+  exit 1
+fi
+
+#######################################
+##     DEFINE & LOAD ENV VARS
+#######################################
+export JOB_DIR="$PWD"
+export BASEDIR="$PWD"
+
 ## Define batch run options
 if [ "$BATCH_SYSTEM" = "PBS" ]; then
   BATCH_SUB_CMD="qsub"
@@ -190,36 +223,6 @@ else
   exit 1
 fi
 
-#######################################
-##         CHECK ARGS
-#######################################
-#if [ "$INPUT_MS" = "" ]; then
-#	echo "ERROR: Missing or empty input measurement set filename!"
-#	exit 1				
-#fi
-if [ "$PARSET_FILE" = "" ]; then
-	echo "ERROR: Missing or empty parset file!"
-	exit 1				
-fi
-if [ "$BATCH_QUEUE" = "" ] && [ "$SUBMIT" = true ]; then
-  echo "ERROR: Empty BATCH_QUEUE argument (hint: you must specify a queue if submit option is activated)!"
-  exit 1
-fi
-
-if [ "$BATCH_SYSTEM" = "" ] && [ "$SUBMIT" = true ]; then
-  echo "ERROR: Empty BATCH_SYSTEM argument (hint: you must specify a batch systen if submit option is activated)!"
-  exit 1
-fi
-
-if [ "$BATCH_SYSTEM" != "PBS" ] && [ "$BATCH_SYSTEM" != "SLURM" ]; then
-  echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
-  exit 1
-fi
-
-#######################################
-##     DEFINE & LOAD ENV VARS
-#######################################
-export JOB_DIR="$PWD"
 
 #######################################
 ##     RUN
