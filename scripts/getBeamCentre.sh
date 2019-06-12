@@ -4,6 +4,8 @@ function getBeamCentre()
 {
 	local footprint_file=$1
 	local beam_id=$2
+	echo "footprint_file=$footprint_file"
+	echo "beam_id=$beam_id"
 
 	line=`awk '$1==$beam_id' $footprint_file`
 	echo $line
