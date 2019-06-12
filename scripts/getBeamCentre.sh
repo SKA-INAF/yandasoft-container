@@ -18,5 +18,5 @@ function getBeamCentre()
 	echo "$dir"
 }
 
-dir=$(getBeamCentre)   
+dir=`getBeamCentre $1 $2`
 echo "$dir"
