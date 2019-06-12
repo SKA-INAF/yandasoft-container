@@ -17,3 +17,6 @@ function getBeamCentre()
 
 	echo "$dir"
 }
+
+dir=$(getBeamCentre)   
+echo "$dir"
