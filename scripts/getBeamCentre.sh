@@ -8,6 +8,8 @@ fi
 
 FOOTPRINT_FILE=$1
 BEAM_ID=$2
+echo "FOOTPRINT_FILE: $FOOTPRINT_FILE"
+echo "BEAM_ID: $BEAM_ID"
 
 line=`awk '$1==$BEAM_ID' $FOOTPRINT_FILE`
 echo $line
