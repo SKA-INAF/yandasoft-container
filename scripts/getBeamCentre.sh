@@ -12,5 +12,5 @@ function getBeamCentre()
   dec=$(echo "$dec_field" | awk -F':' '{printf "%s.%s.%s",$1,$2,$3}')
 	dir="[$ra, $dec, J2000]"
 
-	return $dir
+	echo "$dir"
 }
