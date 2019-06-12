@@ -6,6 +6,7 @@ function getBeamCentre()
 	local beam_id=$2
 
 	line=`awk '$1==$beam_id' $footprint_file`
+	echo $line
 	ra_field=$(echo $line | sed -e 's/,/ /g' | sed -e 's/(//g' | sed -e 's/)//g'| awk '{print $4}')
 	ra=$(echo "$ra_field" | awk -F':' '{printf "%sh%sm%s",$1,$2,$3}')
 	dec_field=$(echo $line | sed -e 's/,/ /g' | sed -e 's/(//g' | sed -e 's/)//g'| awk '{print $5}')
