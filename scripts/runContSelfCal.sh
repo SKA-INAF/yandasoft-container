@@ -21,6 +21,11 @@ if [ "$NARGS" -lt 2 ]; then
 	echo ""	
 
 	echo "*** OPTIONAL ARGS ***"
+	echo "=== SELFCAL OPTIONS ==="	
+	echo "--method=[SELFCAL_METHOD] - Selfcal method to be used. Valid options are {Cmodel,Components,CleanModel} (default=Cmodel)"	
+
+	echo ""
+
 	echo "=== RUN OPTIONS ==="	
 	echo "--envfile=[ENV_FILE] - File (.sh) with list of environment variables to be loaded by each processing node"
 	echo "--containeroptions=[CONTAINER_OPTIONS] - Options to be passed to container run (e.g. -B /home/user:/home/user) (default=none)"	
@@ -49,6 +54,7 @@ fi
 #######################################
 ## MANDATORY OPTIONS
 PARSET_FILE=""
+SELFCAL_METHOD="Cmodel"
 
 ## RUN DEFAULT OPTIONS
 ENV_FILE=""
@@ -78,7 +84,11 @@ do
     	PARSET_FILE=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
     ;;
 		
-			
+		## SELFCAL OPTIONS
+		--method=*)
+    	SELFCAL_METHOD=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    ;;			
+	
 		## RUN OPTIONS	
 		--envfile=*)
     	ENV_FILE=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
@@ -147,6 +157,10 @@ NPROC_TOT=$(($NPROC * $JOB_NNODES))
 if [ "$PARSET_FILE" = "" ]; then
 	echo "ERROR: Missing or empty parset file!"
 	exit 1				
+fi
+if [ "$SELFCAL_METHOD" != "Cmodel" ] && [ "$SELFCAL_METHOD" != "Components" ] && [ "$SELFCAL_METHOD" != "CleanModel" ]; then
+  echo "ERROR: Unknown/not supported SELFCAL_METHOD argument $SELFCAL_METHOD (hint: Cmodel/Components/CleanModel are supported)!"
+  exit 1
 fi
 if [ "$BATCH_QUEUE" = "" ] && [ "$SUBMIT" = true ]; then
   echo "ERROR: Empty BATCH_QUEUE argument (hint: you must specify a queue if submit option is activated)!"
@@ -218,33 +232,63 @@ fi
 #######################################
 ##     RUN
 #######################################
-# - Generate run script
 CMD="mpirun -np $NPROC_TOT $MPI_OPTIONS "
 if [ "$HOSTFILE_GIVEN" = true ] ; then
 	CMD="$CMD -hostfile $HOSTFILE "
 fi
 
-EXE="imager"
+# - Generate Selavy run script
+EXE="selavy"
 EXE_ARGS="-c ${PARSET_FILE}"
-	
 
-shfile="run.sh"
-echo "INFO: Creating run script file $shfile ..."
+shfile_sfinder="run_sfinder.sh"
+echo "INFO: Creating run script file $shfile_sfinder ..."
 (
 	echo "#!/bin/bash"
 	
 	echo ""
 	echo "$EXE $EXE_ARGS"
 
-) > $shfile
-chmod +x $shfile
+) > $shfile_sfinder
+chmod +x $shfile_sfinder
+
+# - Generate Cmodel run script
+EXE="cmodel"
+EXE_ARGS="-c ${PARSET_FILE}"
+
+shfile_cmodel="run_cmodel.sh"
+echo "INFO: Creating run script file $shfile_cmodel ..."
+(
+	echo "#!/bin/bash"
+	
+	echo ""
+	echo "$EXE $EXE_ARGS"
+
+) > $shfile_cmodel
+chmod +x $shfile_cmodel
+
+# - Generate Calibration run script
+EXE="ccalibrator"
+EXE_ARGS="-c ${PARSET_FILE}"
+
+shfile_ccalib="run_calib.sh"
+echo "INFO: Creating run script file $shfile_ccalib ..."
+(
+	echo "#!/bin/bash"
+	
+	echo ""
+	echo "$EXE $EXE_ARGS"
+
+) > $shfile_ccalib
+chmod +x $shfile_ccalib
+
 
 # - Generate submit script
 submitfile="submit.sh"
 echo "INFO: Creating submit script file $submitfile ..."
 (
 	echo "#!/bin/bash"
-	echo "$BATCH_JOB_NAME_DIRECTIVE contImg"
+	echo "$BATCH_JOB_NAME_DIRECTIVE contSelfCal"
 	echo "$BATCH_JOB_OUTFILE_DIRECTIVE"
 	echo "$BATCH_JOB_ERRFILE_DIRECTIVE"
 	echo "$BATCH_JOB_JOINOUTERR_DIRECTIVE"
@@ -280,8 +324,50 @@ echo "INFO: Creating submit script file $submitfile ..."
 	echo 'echo "*************************************************"'
   echo 'echo "****         RUN JOB                     ****"'
   echo 'echo "*************************************************"'
-	echo 'echo "INFO: Running script "'"$shfile"' in container  ...'
-	echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile"
+
+	if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
+		# - Running source finder
+		#NCORES=19
+    #NPPN=19
+    #srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} selavy -c "$parset" >> "$log"
+		echo 'echo "INFO: Running source finder script "'"$shfile_sfinder"' in container  ...'
+		echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_sfinder"
+   
+ 		echo '#err=$?'
+	  echo 'if [ $err != 0 ]; then'
+    echo '  exit $err'
+    echo 'fi'
+
+		echo ""
+
+		if [ "${SELFCAL_METHOD}" == "Cmodel" ]; then
+			#NCORES=2
+      #NPPN=2
+      #srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} cmodel -c "$parset" >> "$log"
+			echo 'echo "INFO: Running cmodel script "'"$shfile_cmodel"' in container  ...'
+			echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_cmodel"
+				
+			echo '#err=$?'
+	  	echo 'if [ $err != 0 ]; then'
+    	echo '  exit $err'
+    	echo 'fi'
+
+		fi
+	fi
+
+	echo ""
+	
+	# - Run calibration
+	#NCORES=1
+	#NPPN=1
+	#srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} ccalibrator -c "$parset" >> "$log"
+	echo 'echo "INFO: Running calibrator script "'"$shfile_ccalib"' in container  ...'
+	echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_ccalib"
+   
+	echo '#err=$?'
+	echo 'if [ $err != 0 ]; then'
+  echo '  exit $err'
+  echo 'fi'
 	
 	echo ""
 
@@ -299,4 +385,3 @@ if [ "$SUBMIT" = true ] ; then
 	echo "INFO: Submitting script $submitfile to QUEUE $BATCH_QUEUE using $BATCH_SYSTEM batch system ..."
 	$BATCH_SUB_CMD $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile
 fi
-
