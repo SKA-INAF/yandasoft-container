@@ -252,10 +252,6 @@ fi
 #######################################
 ##     RUN
 #######################################
-CMD="mpirun -np $NPROC_TOT $MPI_OPTIONS "
-if [ "$HOSTFILE_GIVEN" = true ] ; then
-	CMD="$CMD -hostfile $HOSTFILE "
-fi
 
 
 # - Generate parsets & submit scripts 
@@ -289,6 +285,12 @@ if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
 		echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
   	exit 1
 	fi
+
+	CMD="mpirun -np $NPROC_SFIND_TOT $MPI_OPTIONS "
+	if [ "$HOSTFILE_GIVEN" = true ] ; then
+		CMD="$CMD -hostfile $HOSTFILE "
+	fi
+
 
 	# - Submit script
 	submitfile_sfinder="submit_sfinder.sh"
@@ -383,6 +385,12 @@ if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
   		exit 1
 		fi
 	
+		CMD="mpirun -np $NPROC_CMODEL_TOT $MPI_OPTIONS "
+		if [ "$HOSTFILE_GIVEN" = true ] ; then
+			CMD="$CMD -hostfile $HOSTFILE "
+		fi
+
+
 		# - Submission script
 		submitfile_cmodel="submit_cmodel.sh"
 		echo "INFO: Creating submit script file $submitfile_cmodel ..."
@@ -477,6 +485,12 @@ else
 	echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
   exit 1
 fi
+
+CMD="mpirun -np $NPROC_CAL_TOT $MPI_OPTIONS "
+if [ "$HOSTFILE_GIVEN" = true ] ; then
+	CMD="$CMD -hostfile $HOSTFILE "
+fi
+
 
 # - Submission script
 submitfile_ccalib="submit_ccalib.sh"
