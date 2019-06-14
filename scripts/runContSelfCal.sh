@@ -30,6 +30,9 @@ if [ "$NARGS" -lt 2 ]; then
 	echo "--envfile=[ENV_FILE] - File (.sh) with list of environment variables to be loaded by each processing node"
 	echo "--containeroptions=[CONTAINER_OPTIONS] - Options to be passed to container run (e.g. -B /home/user:/home/user) (default=none)"	
 	echo "--nproc=[NPROC] - Number of MPI processors per node used (NB: mpi tot nproc=nproc x nnodes) (default=1)"
+	echo "--nproc-sfind=[NPROC_SFIND] - Number of MPI processors per node used for source finding (NB: mpi tot nproc=nproc x nnodes) (default=nproc)"
+	echo "--nproc-cmodel=[NPROC_SFIND] - Number of MPI processors per node used for cmodel (NB: mpi tot nproc=nproc x nnodes) (default=nproc)"
+	echo "--nproc-cal=[NPROC_SFIND] - Number of MPI processors per node used for calibration (NB: mpi tot nproc=nproc x nnodes) (default=nproc)"
 	echo "--hostfile=[HOSTFILE] - Ascii file with list of hosts used by MPI (default=no hostfile used)"
 	
 	echo ""
@@ -61,6 +64,9 @@ ENV_FILE=""
 CONTAINER_IMG=""
 CONTAINER_OPTIONS=""
 NPROC=1
+NPROC_SFIND=$NPROC
+NPROC_CMODEL=$NPROC
+NPROC_CAL=$NPROC
 MPI_OPTIONS=""
 HOSTFILE=""
 HOSTFILE_GIVEN=false
@@ -102,6 +108,15 @@ do
     ;;
 		--nproc=*)
       NPROC=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    ;;
+		--nproc-sfind=*)
+      NPROC_SFIND=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    ;;
+		--nproc-cmodel=*)
+      NPROC_CMODEL=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
+    ;;
+		--nproc-cal=*)
+      NPROC_CAL=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
     ;;
 		--mpioptions=*)
       MPI_OPTIONS=`echo $item | sed 's/[-a-zA-Z0-9]*=//'`
@@ -149,6 +164,9 @@ done
 
 ## Compute total number of MPI processor to be given to mpirun
 NPROC_TOT=$(($NPROC * $JOB_NNODES))
+NPROC_SFIND_TOT=$(($NPROC_SFIND * $JOB_NNODES))
+NPROC_CMODEL_TOT=$(($NPROC_CMODEL * $JOB_NNODES))
+NPROC_CAL_TOT=$(($NPROC_CAL * $JOB_NNODES))
 
 
 #######################################
@@ -188,6 +206,7 @@ if [ "$BATCH_SYSTEM" = "PBS" ]; then
   BATCH_SUB_CMD="qsub"
 	BATCH_QUEUE_NAME_OPTION="-q"
 	BATCH_JOB_NAME_DIRECTIVE="#PBS -N"
+	BATCH_JOB_DEPENDENCY_OPTION="-W depend=afterok"
 	BATCH_JOB_OUTFILE_DIRECTIVE="#PBS -o $BASEDIR"
 	BATCH_JOB_ERRFILE_DIRECTIVE="#PBS -e $BASEDIR"
 	BATCH_JOB_JOINOUTERR_DIRECTIVE="#PBS -j oe"
@@ -209,6 +228,7 @@ elif [ "$BATCH_SYSTEM" = "SLURM" ]; then
   BATCH_SUB_CMD="sbatch"
 	BATCH_QUEUE_NAME_OPTION="-p"
 	BATCH_JOB_NAME_DIRECTIVE="#SBATCH -J"
+	BATCH_JOB_DEPENDENCY_OPTION="--dependency=afterok"
 	BATCH_JOB_OUTFILE_DIRECTIVE="#SBATCH -o $BASEDIR"
 	BATCH_JOB_ERRFILE_DIRECTIVE="#SBATCH -e $BASEDIR"
 	BATCH_JOB_JOINOUTERR_DIRECTIVE="" # There is no such option in SLURM
@@ -237,37 +257,203 @@ if [ "$HOSTFILE_GIVEN" = true ] ; then
 	CMD="$CMD -hostfile $HOSTFILE "
 fi
 
-# - Generate Selavy run script
-EXE="selavy"
-EXE_ARGS="-c ${PARSET_FILE}"
 
-shfile_sfinder="run_sfinder.sh"
-echo "INFO: Creating run script file $shfile_sfinder ..."
-(
-	echo "#!/bin/bash"
+# - Generate parsets & submit scripts 
+if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
+
+	#*************************************
+	##            SFINDER
+	#*************************************
+	# - Run script
+	EXE="selavy"
+	EXE_ARGS="-c ${PARSET_FILE}"
+
+	shfile_sfinder="run_sfinder.sh"
+	echo "INFO: Creating run script file $shfile_sfinder ..."
+	(
+		echo "#!/bin/bash"
 	
-	echo ""
-	echo "$EXE $EXE_ARGS"
+		echo ""
+		echo "$EXE $EXE_ARGS"
 
-) > $shfile_sfinder
-chmod +x $shfile_sfinder
+	) > $shfile_sfinder
+	chmod +x $shfile_sfinder
 
-# - Generate Cmodel run script
-EXE="cmodel"
-EXE_ARGS="-c ${PARSET_FILE}"
 
-shfile_cmodel="run_cmodel.sh"
-echo "INFO: Creating run script file $shfile_cmodel ..."
-(
-	echo "#!/bin/bash"
+	# - Define submission options
+	if [ "$BATCH_SYSTEM" = "PBS" ]; then
+		BATCH_JOB_NNODES_DIRECTIVE="#PBS -l select=$JOB_NNODES"':'"ncpus=$JOB_NCPUS"':'"mpiprocs=$NPROC_SFIND"':'"mem=$JOB_MEMORY"'gb'
+	elif [ "$BATCH_SYSTEM" = "SLURM" ]; then
+		BATCH_JOB_NPROC_DIRECTIVE="#SBATCH --ntasks=$NPROC_SFIND_TOT --ntasks-per-node=$NPROC_SFIND"
+	else
+		echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
+  	exit 1
+	fi
+
+	# - Submit script
+	submitfile_sfinder="submit_sfinder.sh"
+	echo "INFO: Creating submit script file $submitfile_sfinder ..."
+	(
+		echo "#!/bin/bash"
+		echo "$BATCH_JOB_NAME_DIRECTIVE contSelfCal_sfind"
+		echo "$BATCH_JOB_OUTFILE_DIRECTIVE"
+		echo "$BATCH_JOB_ERRFILE_DIRECTIVE"
+		echo "$BATCH_JOB_JOINOUTERR_DIRECTIVE"
+		echo "$BATCH_JOB_WALLTIME_DIRECTIVE"
+		echo "$BATCH_JOB_SHELL_DIRECTIVE"
+		echo "$BATCH_JOB_USERGRP_DIRECTIVE"
+		echo "$BATCH_JOB_PRIORITY"
+		echo "$BATCH_JOB_NOREQUEUE_DIRECTIVE"
+		echo "$BATCH_JOB_SCATTER_DIRECTIVE"
+		echo "$BATCH_JOB_NNODES_DIRECTIVE"
+		echo "$BATCH_JOB_NPROC_DIRECTIVE"
+		echo "$BATCH_JOB_MEM_DIRECTIVE"
+		echo "$BATCH_JOB_NCORE_DIRECTIVE"
+
+		echo 'echo "INFO: Start time"'
+		echo 'date'
+
+		echo " "
+		echo 'echo "INFO: Running on host $HOSTNAME ..."'
+		echo " "
+
+		echo 'echo "*************************************************"'
+  	echo 'echo "****         PREPARE JOB                     ****"'
+  	echo 'echo "*************************************************"'
+		echo "JOBDIR=$JOB_DIR" 
+		if [ "$ENV_FILE" != "" ]; then
+			echo 'echo "INFO: Source the software environment ..."'
+			echo "source $ENV_FILE"		
+		fi
+
+		echo ""
+
+		echo 'echo "*************************************************"'
+  	echo 'echo "****         RUN JOB                     ****"'
+  	echo 'echo "*************************************************"'
+		echo 'echo "INFO: Running source finder script '"$shfile_sfinder"' in container  ...'
+		echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_sfinder"
+
+		echo ""
+
+		echo 'echo "INFO: End time"'
+		echo 'date'
+
+		echo 'echo "*** END RUN ***"'
+
+	) > $submitfile_sfinder
+	chmod +x $submitfile_sfinder
+
+	# Submits the job to batch system
+	if [ "$SUBMIT" = true ] ; then
+		echo "INFO: Submitting script $submitfile_sfinder to QUEUE $BATCH_QUEUE using $BATCH_SYSTEM batch system ..."
+		JOB_ID=`$BATCH_SUB_CMD $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile_sfinder`
+		JOBID_CHAIN="$JOBID_CHAIN:$JOBID"
+		echo "INFO: Submitted script $submitfile_sfinder to queue with job id $JOB_ID ..."
+	fi
 	
-	echo ""
-	echo "$EXE $EXE_ARGS"
 
-) > $shfile_cmodel
-chmod +x $shfile_cmodel
+	#*************************************
+	##            CMODEL
+	#*************************************
+	
+	if [ "${SELFCAL_METHOD}" == "Cmodel" ]; then
+		# - Run script
+		EXE="cmodel"
+		EXE_ARGS="-c ${PARSET_FILE}"
 
-# - Generate Calibration run script
+		shfile_cmodel="run_cmodel.sh"
+		echo "INFO: Creating run script file $shfile_cmodel ..."
+		(
+			echo "#!/bin/bash"
+	
+			echo ""
+			echo "$EXE $EXE_ARGS"
+
+		) > $shfile_cmodel
+		chmod +x $shfile_cmodel
+
+		# - Define submission options
+		if [ "$BATCH_SYSTEM" = "PBS" ]; then
+			BATCH_JOB_NNODES_DIRECTIVE="#PBS -l select=$JOB_NNODES"':'"ncpus=$JOB_NCPUS"':'"mpiprocs=$NPROC_CMODEL"':'"mem=$JOB_MEMORY"'gb'
+		elif [ "$BATCH_SYSTEM" = "SLURM" ]; then
+			BATCH_JOB_NPROC_DIRECTIVE="#SBATCH --ntasks=$NPROC_CMODEL_TOT --ntasks-per-node=$NPROC_CMODEL"
+		else
+			echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
+  		exit 1
+		fi
+	
+		# - Submission script
+		submitfile_cmodel="submit_cmodel.sh"
+		echo "INFO: Creating submit script file $submitfile_cmodel ..."
+		(
+			echo "#!/bin/bash"
+			echo "$BATCH_JOB_NAME_DIRECTIVE contSelfCal_cmodel"
+			echo "$BATCH_JOB_OUTFILE_DIRECTIVE"
+			echo "$BATCH_JOB_ERRFILE_DIRECTIVE"
+			echo "$BATCH_JOB_JOINOUTERR_DIRECTIVE"
+			echo "$BATCH_JOB_WALLTIME_DIRECTIVE"
+			echo "$BATCH_JOB_SHELL_DIRECTIVE"
+			echo "$BATCH_JOB_USERGRP_DIRECTIVE"
+			echo "$BATCH_JOB_PRIORITY"
+			echo "$BATCH_JOB_NOREQUEUE_DIRECTIVE"
+			echo "$BATCH_JOB_SCATTER_DIRECTIVE"
+			echo "$BATCH_JOB_NNODES_DIRECTIVE"
+			echo "$BATCH_JOB_NPROC_DIRECTIVE"
+			echo "$BATCH_JOB_MEM_DIRECTIVE"
+			echo "$BATCH_JOB_NCORE_DIRECTIVE"
+
+			echo 'echo "INFO: Start time"'
+			echo 'date'
+
+			echo " "
+			echo 'echo "INFO: Running on host $HOSTNAME ..."'
+			echo " "
+
+			echo 'echo "*************************************************"'
+  		echo 'echo "****         PREPARE JOB                     ****"'
+  		echo 'echo "*************************************************"'
+			echo "JOBDIR=$JOB_DIR" 
+			if [ "$ENV_FILE" != "" ]; then
+				echo 'echo "INFO: Source the software environment ..."'
+				echo "source $ENV_FILE"		
+			fi
+
+			echo ""
+
+			echo 'echo "*************************************************"'
+  		echo 'echo "****         RUN JOB                     ****"'
+  		echo 'echo "*************************************************"'
+			echo 'echo "INFO: Running cmodel script '"$shfile_cmodel"' in container  ...'
+			echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_cmodel"
+
+			echo ""
+
+			echo 'echo "INFO: End time"'
+			echo 'date'
+
+			echo 'echo "*** END RUN ***"'
+
+		) > $submitfile_cmodel
+		chmod +x $submitfile_cmodel
+
+		# Submits the job to batch system
+		if [ "$SUBMIT" = true ] ; then
+			echo "INFO: Submitting script $submitfile_cmodel to QUEUE $BATCH_QUEUE using $BATCH_SYSTEM batch system ..."
+			JOB_ID=`$BATCH_SUB_CMD $BATCH_JOB_DEPENDENCY_OPTION$JOBID_CHAIN $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile_cmodel`
+			echo "INFO: Submitted script $submitfile_cmodel to queue with job id $JOB_ID (dependency list=$BATCH_JOB_DEPENDENCY_OPTION$JOBID_CHAIN) ..."
+			JOBID_CHAIN="$JOBID_CHAIN:$JOBID"
+		fi		
+
+	fi
+
+fi
+
+
+#*************************************
+##            CALIBRATION
+#*************************************
+# - Run script
 EXE="ccalibrator"
 EXE_ARGS="-c ${PARSET_FILE}"
 
@@ -282,13 +468,22 @@ echo "INFO: Creating run script file $shfile_ccalib ..."
 ) > $shfile_ccalib
 chmod +x $shfile_ccalib
 
+# - Define submission options
+if [ "$BATCH_SYSTEM" = "PBS" ]; then
+	BATCH_JOB_NNODES_DIRECTIVE="#PBS -l select=$JOB_NNODES"':'"ncpus=$JOB_NCPUS"':'"mpiprocs=$NPROC_CAL"':'"mem=$JOB_MEMORY"'gb'
+elif [ "$BATCH_SYSTEM" = "SLURM" ]; then
+	BATCH_JOB_NPROC_DIRECTIVE="#SBATCH --ntasks=$NPROC_CAL_TOT --ntasks-per-node=$NPROC_CAL"
+else
+	echo "ERROR: Unknown/not supported BATCH_SYSTEM argument $BATCH_SYSTEM (hint: PBS/SLURM are supported)!"
+  exit 1
+fi
 
-# - Generate submit script
-submitfile="submit.sh"
-echo "INFO: Creating submit script file $submitfile ..."
+# - Submission script
+submitfile_ccalib="submit_ccalib.sh"
+echo "INFO: Creating submit script file $submitfile_ccalib ..."
 (
 	echo "#!/bin/bash"
-	echo "$BATCH_JOB_NAME_DIRECTIVE contSelfCal"
+	echo "$BATCH_JOB_NAME_DIRECTIVE contSelfCal_cal"
 	echo "$BATCH_JOB_OUTFILE_DIRECTIVE"
 	echo "$BATCH_JOB_ERRFILE_DIRECTIVE"
 	echo "$BATCH_JOB_JOINOUTERR_DIRECTIVE"
@@ -324,51 +519,9 @@ echo "INFO: Creating submit script file $submitfile ..."
 	echo 'echo "*************************************************"'
   echo 'echo "****         RUN JOB                     ****"'
   echo 'echo "*************************************************"'
-
-	if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
-		# - Running source finder
-		#NCORES=19
-    #NPPN=19
-    #srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} selavy -c "$parset" >> "$log"
-		echo 'echo "INFO: Running source finder script "'"$shfile_sfinder"' in container  ...'
-		echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_sfinder"
-   
- 		echo '#err=$?'
-	  echo 'if [ $err != 0 ]; then'
-    echo '  exit $err'
-    echo 'fi'
-
-		echo ""
-
-		if [ "${SELFCAL_METHOD}" == "Cmodel" ]; then
-			#NCORES=2
-      #NPPN=2
-      #srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} cmodel -c "$parset" >> "$log"
-			echo 'echo "INFO: Running cmodel script "'"$shfile_cmodel"' in container  ...'
-			echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_cmodel"
-				
-			echo '#err=$?'
-	  	echo 'if [ $err != 0 ]; then'
-    	echo '  exit $err'
-    	echo 'fi'
-
-		fi
-	fi
-
-	echo ""
-	
-	# - Run calibration
-	#NCORES=1
-	#NPPN=1
-	#srun --export=ALL --ntasks=${NCORES} --ntasks-per-node=${NPPN} ccalibrator -c "$parset" >> "$log"
-	echo 'echo "INFO: Running calibrator script "'"$shfile_ccalib"' in container  ...'
+	echo 'echo "INFO: Running calibrator script '"$shfile_ccalib"' in container  ...'
 	echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_ccalib"
    
-	echo '#err=$?'
-	echo 'if [ $err != 0 ]; then'
-  echo '  exit $err'
-  echo 'fi'
-	
 	echo ""
 
 	echo 'echo "INFO: End time"'
@@ -376,12 +529,21 @@ echo "INFO: Creating submit script file $submitfile ..."
 
 	echo 'echo "*** END RUN ***"'
 
-) > $submitfile
-chmod +x $submitfile
+) > $submitfile_ccalib
+chmod +x $submitfile_ccalib
 
 
 # Submits the job to batch system
 if [ "$SUBMIT" = true ] ; then
-	echo "INFO: Submitting script $submitfile to QUEUE $BATCH_QUEUE using $BATCH_SYSTEM batch system ..."
-	$BATCH_SUB_CMD $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile
-fi
+	echo "INFO: Submitting script $submitfile_ccalib to QUEUE $BATCH_QUEUE using $BATCH_SYSTEM batch system ..."
+	
+	if [ "${JOBID_CHAIN}" == "" ]; then
+		JOB_ID=`$BATCH_SUB_CMD $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile_ccalib`
+		echo "INFO: Submitted script $submitfile_ccalib to queue with job id $JOB_ID (no job dependencies) ..."
+	else
+		JOB_ID=`$BATCH_SUB_CMD $BATCH_JOB_DEPENDENCY_OPTION$JOBID_CHAIN $BATCH_QUEUE_NAME_OPTION $BATCH_QUEUE $submitfile_ccalib`
+		echo "INFO: Submitted script $submitfile_ccalib to queue with job id $JOB_ID (dependency list=$BATCH_JOB_DEPENDENCY_OPTION$JOBID_CHAIN) ..."
+	fi
+fi	
+
+
