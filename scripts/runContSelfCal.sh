@@ -333,7 +333,7 @@ if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
 		echo 'echo "*************************************************"'
   	echo 'echo "****         RUN JOB                     ****"'
   	echo 'echo "*************************************************"'
-		echo 'echo "INFO: Running source finder script '"$shfile_sfinder"' in container  ...'
+		echo 'echo "INFO: Running source finder script '"$shfile_sfinder"' in container  ..."'
 		echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_sfinder"
 
 		echo ""
@@ -432,7 +432,7 @@ if [ "${SELFCAL_METHOD}" != "CleanModel" ]; then
 			echo 'echo "*************************************************"'
   		echo 'echo "****         RUN JOB                     ****"'
   		echo 'echo "*************************************************"'
-			echo 'echo "INFO: Running cmodel script '"$shfile_cmodel"' in container  ...'
+			echo 'echo "INFO: Running cmodel script '"$shfile_cmodel"' in container  ..."'
 			echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_cmodel"
 
 			echo ""
@@ -533,7 +533,7 @@ echo "INFO: Creating submit script file $submitfile_ccalib ..."
 	echo 'echo "*************************************************"'
   echo 'echo "****         RUN JOB                     ****"'
   echo 'echo "*************************************************"'
-	echo 'echo "INFO: Running calibrator script '"$shfile_ccalib"' in container  ...'
+	echo 'echo "INFO: Running calibrator script '"$shfile_ccalib"' in container  ..."'
 	echo "$CMD singularity exec $CONTAINER_OPTIONS $CONTAINER_IMG $JOB_DIR/$shfile_ccalib"
    
 	echo ""
