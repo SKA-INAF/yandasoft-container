@@ -24,6 +24,8 @@ if [ "$NARGS" -lt 2 ]; then
 	echo "--parset=[PARSET_FILE] - Input configuration file with flagging options"	
 	echo "--use-aoflagger - Use AOFLAGGER instead of default cflag"
 	
+	echo ""
+
 	echo "=== RUN OPTIONS ==="	
 	echo "--envfile=[ENV_FILE] - File (.sh) with list of environment variables to be loaded by each processing node"
 	echo "--containeroptions=[CONTAINER_OPTIONS] - Options to be passed to container run (e.g. -B /home/user:/home/user) (default=none)"	
@@ -141,8 +143,12 @@ done
 #######################################
 ##         CHECK ARGS
 #######################################
-if [ "$INPUT_MS" = "" ]; then
-	echo "ERROR: Missing or empty input measurement set filename!"
+if [ "$INPUT_MS" = "" ] && [ "$PARSET_FILE" = "" ]; then
+	echo "ERROR: Missing or empty input measurement set filename or parset file (at least one required)!"
+	exit 1				
+fi
+if [ "$INPUT_MS" = "" ] && [ "$USE_AOFLAGGER" = true ]; then
+	echo "ERROR: Missing or empty input measurement set filename (required when aoflagger is selected)!"
 	exit 1				
 fi
 if [ "$BATCH_QUEUE" = "" ] && [ "$SUBMIT" = true ]; then
