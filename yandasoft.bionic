@@ -24,6 +24,9 @@ From: sriggi/yandasoft
 	echo "Updating system packages ..."
 	apt-get update
 
+	echo "Installing openssh-client"
+	apt-get install openssh-client
+
 	#################################
 	###   SET ENV VARS
 	#################################
